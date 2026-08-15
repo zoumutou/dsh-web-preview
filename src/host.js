@@ -204,25 +204,65 @@ export function apply(ctx) {
     const dot = name.lastIndexOf('.')
     const ext = dot >= 0 ? name.slice(dot).toLowerCase() : ''
 
-    if (ext === '.md' || ext === '.markdown') {
-      try {
-        const text = await ctx.fs.readText(target)
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end(mdToHtml(name, text))
-      } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
-        res.end('read failed')
-      }
-      return
+    // 资源请求（<script src> / <link> / <img> 等）必须返回原始字节，
+    // 否则站点引用本地 .js/.css 时会收到"代码高亮页"HTML 而解析失败；
+    // 只有顶层文档导航（含 iframe 预览）才展示渲染视图（代码/Markdown 页）
+    const isDocumentRequest = (req) => {
+      const dest = req.headers['sec-fetch-dest']
+      if (dest) return dest === 'document' || dest === 'iframe'
+      const accept = String(req.headers['accept'] || '')
+      return accept.indexOf('text/html') !== -1
     }
-    if (CODE_EXT.indexOf(ext) !== -1) {
+
+    if (isDocumentRequest(req)) {
+      if (ext === '.md' || ext === '.markdown') {
+        try {
+          const text = await ctx.fs.readText(target)
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+          res.end(mdToHtml(name, text))
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end('read failed')
+        }
+        return
+      }
+      if (CODE_EXT.indexOf(ext) !== -1) {
+        try {
+          const text = await ctx.fs.readText(target)
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+          res.end(codePage(name, text))
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end('read failed')
+        }
+        return
+      }
+    }
+
+    // 静态 HTML：注入加载兜底（外部资源挂起导致 load 永不触发时，
+    // 派发合成 load 让站点自身的 loading 遮罩逻辑走完）
+    const WATCHDOG = '<script>(function(){var t=setTimeout(function(){if(document.readyState!=="complete"){try{window.dispatchEvent(new Event("load"))}catch(e){}}},8000);window.addEventListener("load",function(){clearTimeout(t)},{once:true})})();</script>'
+    if (ext === '.html' || ext === '.htm') {
       try {
-        const text = await ctx.fs.readText(target)
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end(codePage(name, text))
+        const bytes = await ctx.fs.readBytes(target, undefined, MAX)
+        let html = Buffer.from(bytes).toString('utf8')
+        if (html.indexOf(WATCHDOG) === -1) {
+          const m = html.match(/<head([^>]*)>/i)
+          if (m) html = html.slice(0, m.index + m[0].length) + WATCHDOG + html.slice(m.index + m[0].length)
+          else html = WATCHDOG + html
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' })
+        if (req.method === 'HEAD') { res.end(); return }
+        res.end(Buffer.from(html, 'utf8'))
       } catch (e) {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
-        res.end('read failed')
+        const code = String((e && (e.code || e.name)) || '')
+        if (code.includes('TOO_LARGE')) {
+          res.writeHead(413, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end('file too large')
+        } else {
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+          res.end('read failed')
+        }
       }
       return
     }
