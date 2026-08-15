@@ -8,6 +8,8 @@
  * resolve-path). Non-static projects (Cargo/package.json/go.mod/py) can be
  * spawned with output collected and URL auto-detected.
  */
+import { mkdir, writeFile } from 'node:fs/promises'
+
 export const name = 'dsh-web-preview-panel'
 
 export const inject = ['webServer', 'fs', 'subprocess', 'timer']
@@ -15,6 +17,7 @@ export const inject = ['webServer', 'fs', 'subprocess', 'timer']
 export function apply(ctx) {
   const base = '/__dsh-preview'
   const MAX = 256 * 1024 * 1024
+  const MAX_UPLOAD = 64 * 1024 * 1024
 
   /** sessionId -> { root, project } */
   const sessions = new Map()
@@ -565,6 +568,62 @@ export function apply(ctx) {
     }
     res.end(body)
   }
+
+  // ---------- 对话框拖入文件：保存到工作区 ----------
+  // 浏览器无法读取本地文件绝对路径，客户端把 File 原始字节 POST 到这里，
+  // 落盘到 <预览根目录>/.dsh-drops/ 下，随后以相对/绝对路径引用进对话草稿。
+  const sanitizeFileName = (name) => {
+    let s = String(name || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim()
+    if (!s || s === '.' || s === '..') s = 'file'
+    if (s.length > 120) {
+      const dot = s.lastIndexOf('.')
+      s = s.slice(0, 110) + (dot > 0 ? s.slice(dot).slice(0, 10) : '')
+    }
+    return s
+  }
+
+  const uploadHandler = async (req, res) => {
+    const send = (code, obj) => {
+      res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify(obj))
+    }
+    if (req.method !== 'POST') return send(405, { ok: false, error: 'method not allowed' })
+    const sid = String(req.headers['x-dsh-sid'] || '')
+    // Node 以 latin1 解码请求头；先把字节还原成 UTF-8，再解客户端可能做的百分号编码
+    let name = ''
+    try {
+      name = Buffer.from(String(req.headers['x-file-name'] || ''), 'latin1').toString('utf8')
+      name = decodeURIComponent(name)
+    } catch (e) { /* 非法编码按空名处理 */ }
+    const size = Number(req.headers['x-file-size'] || 0)
+    const type = String(req.headers['x-file-type'] || 'application/octet-stream')
+    const sess = getSession(sid)
+    if (!sess || !sess.root) return send(404, { ok: false, error: '预览根目录未设置，请先打开预览面板' })
+    if (!Number.isFinite(size) || size < 0 || size > MAX_UPLOAD) {
+      return send(413, { ok: false, error: '文件大小超出上限（64 MB）' })
+    }
+    const safe = sanitizeFileName(name)
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    const rel = '.dsh-drops/' + ts + '-' + safe
+    const abs = sess.root + '/' + rel
+    let received = 0
+    try {
+      await mkdir(sess.root + '/.dsh-drops', { recursive: true })
+      const chunks = []
+      for await (const chunk of req) {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        received += buf.length
+        if (received > MAX_UPLOAD) return send(413, { ok: false, error: '文件大小超出上限（64 MB）' })
+        chunks.push(buf)
+      }
+      await writeFile(abs, Buffer.concat(chunks))
+    } catch (e) {
+      return send(500, { ok: false, error: '保存失败: ' + String((e && e.message) || e) })
+    }
+    return send(200, { ok: true, root: sess.root, rel, abs, size: received, type })
+  }
+
+  ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: base + '/upload', handler: uploadHandler }))
 
   ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: PROXY_BASE, handler: proxyHandler }))
 

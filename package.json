@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-preview-panel",
-  "version": "0.1.5",
-  "description": "DeepSeek Harness 侧边网页预览面板：本地静态托管、项目运行、元素标记批注、链接点击接管、Markdown/代码/图片预览。",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness 侧边网页预览面板：本地静态托管、项目运行、元素标记批注、链接点击接管、对话框直接拖入文件、Markdown/代码/图片预览。",
   "keywords": [
     "deepseek-harness",
     "dsh",
