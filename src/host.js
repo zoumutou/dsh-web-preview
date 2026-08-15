@@ -598,7 +598,12 @@ export function apply(ctx) {
     const size = Number(req.headers['x-file-size'] || 0)
     const type = String(req.headers['x-file-type'] || 'application/octet-stream')
     const sess = getSession(sid)
-    if (!sess || !sess.root) return send(404, { ok: false, error: '预览根目录未设置，请先打开预览面板' })
+    if (!sess.root) {
+      // 预览面板未打开过 → 回退到默认工作区目录，保证拖入文件也能落盘
+      const d = await defaultRoot()
+      if (d) sess.root = d
+    }
+    if (!sess.root) return send(404, { ok: false, error: '无法确定保存目录：请先打开预览面板或选择工作区' })
     if (!Number.isFinite(size) || size < 0 || size > MAX_UPLOAD) {
       return send(413, { ok: false, error: '文件大小超出上限（64 MB）' })
     }
