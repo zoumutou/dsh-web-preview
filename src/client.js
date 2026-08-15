@@ -45,6 +45,8 @@ const PANEL_CSS = `
 .wvp-proj-log { max-height:110px; overflow:auto; background:rgba(0,0,0,.35); border-radius:8px; padding:6px 8px; font:10px/1.5 ui-monospace,Menlo,monospace; color:#9fe8a8; white-space:pre-wrap; word-break:break-all; }
 .wvp-error { color:var(--dsw-alias-state-error-primary, #ff6b6b); font-size:11px; word-break:break-all; padding:5px 10px; }
 .wvp-hint { color:var(--dsw-alias-brand-primary, #4f8cff); font-size:11px; padding:5px 10px; }
+.wvp-suggest { display:flex; align-items:center; gap:8px; padding:7px 10px; background:rgba(79,140,255,.10); border-bottom:1px solid rgba(79,140,255,.30); font-size:11px; }
+.wvp-suggest .wvp-btn { font-size:11px; padding:3px 10px; flex:none; }
 .wvp-crumbs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; color:var(--dsw-alias-label-secondary, #9aa0a6); font-size:11px; }
 .wvp-crumb { cursor:pointer; color:var(--dsw-alias-label-secondary, #9aa0a6); }
 .wvp-crumb:hover { color:var(--dsw-alias-brand-primary, #4f8cff); }
@@ -105,7 +107,7 @@ function apply(ctx) {
     const state = {
       sid: '', base: '', root: null, dir: '', dirs: [], pages: [], url: '', error: null,
       marking: false, selected: null, annotationText: '', annotations: [], pendingMarks: [],
-      dropItems: [], width: 480, pagesOpen: false,
+      dropItems: [], suggest: null, note: null, width: 480, pagesOpen: false,
       project: { kind: null, name: '', cmd: null, running: false, starting: false, log: [], url: null, exitCode: null, detectError: null }
     }
     const subs = new Set()
@@ -329,12 +331,11 @@ function apply(ctx) {
       if (!name) return
       url = base + '/' + name
       call('resolve-path', { sid: currentSid, path: href }).then((res) => {
+        const p2 = getPanel(currentSid)
         if (res && res.ok && res.url) {
-          const p2 = getPanel(currentSid)
-          p2.model.set({ url: res.url, error: null })
+          p2.model.set({ url: res.url, error: null, suggest: null, note: res.note || null })
         } else if (res && !res.ok && res.error) {
-          const p2 = getPanel(currentSid)
-          p2.model.set({ error: res.error })
+          p2.model.set({ error: res.error, suggest: res.suggestRoot ? { root: res.suggestRoot, file: res.file || name } : null, note: null })
         }
       }).catch(() => { /* noop */ })
     } else if (!href.startsWith('/') && !href.includes('://')) {
@@ -1045,7 +1046,7 @@ function apply(ctx) {
         // 根目录默认 = 当前会话所属工作区目录
         const hint = workspacePathFor(sid, items, recentId)
         const res = await call('set-root', { path: hint, sid })
-        p.model.set({ root: res.root, base: res.base, error: null })
+        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, note: null })
         if (rootInput === '' || (rootInput && hint && rootInput !== res.root)) setRootInput(res.root || '')
         const [pages, det] = await Promise.all([
           call('pages', { dir: '', sid }),
@@ -1113,11 +1114,11 @@ function apply(ctx) {
 
     const go = () => {
       const u = resolveUrl(input, m.base)
-      if (u) { p.model.set({ url: u, error: null }); setReload((r) => r + 1) }
+      if (u) { p.model.set({ url: u, error: null, suggest: null, note: null }); setReload((r) => r + 1) }
     }
 
     const openPage = (rel) => {
-      p.model.set({ url: m.base + '/' + rel, error: null })
+      p.model.set({ url: m.base + '/' + rel, error: null, suggest: null, note: null })
       setReload((r) => r + 1)
     }
 
@@ -1130,10 +1131,24 @@ function apply(ctx) {
       }
     }
 
+    const switchRoot = async () => {
+      const s = m.suggest
+      if (!s) return
+      try {
+        const res = await call('set-root', { path: s.root, sid })
+        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, note: null })
+        setRootInput(res.root || '')
+        if (s.file) p.model.set({ url: res.base + '/' + s.file })
+        setReload((r) => r + 1)
+      } catch (e) {
+        p.model.set({ error: e.message, suggest: null })
+      }
+    }
+
     const applyRoot = async () => {
       try {
         const res = await call('set-root', { path: rootInput, sid })
-        p.model.set({ root: res.root, base: res.base, error: null })
+        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, note: null })
         const pp = await call('pages', { dir: '', sid })
         p.model.set({ dir: pp.dir || '', dirs: pp.dirs || [], pages: pp.pages || [] })
         const t = pp.pages.find((x) => x.name === 'index.html') || pp.pages[0]
@@ -1280,6 +1295,12 @@ function apply(ctx) {
         )
       ) : null,
       m.error ? React.createElement('div', { className: 'wvp-error' }, String(m.error)) : null,
+      m.suggest ? React.createElement('div', { className: 'wvp-suggest' },
+        React.createElement('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+          '📁 ' + (m.suggest.file || '') + ' 在工作区外（' + m.suggest.root + '）'),
+        React.createElement('button', { className: 'wvp-btn primary', onClick: switchRoot }, '切换到该目录并打开')
+      ) : null,
+      m.note ? React.createElement('div', { className: 'wvp-hint' }, m.note) : null,
       m.marking ? React.createElement('div', { className: 'wvp-hint' }, '标记模式：悬停高亮元素，点击选取并直接在元素旁添加标注；Esc 退出') : null,
       React.createElement('div', { className: 'wvp-frame-wrap' },
         m.url ? React.createElement('iframe', {

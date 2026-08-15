@@ -64,19 +64,80 @@ export function apply(ctx) {
 
   const escHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-  const render404 = (res, rel, root) => {
+  // 工作区文件查找（按文件名包含匹配；跳过备份/构建产物目录，带遍历预算）
+  const SEARCH_MAX_ENTRIES = 150000
+  const SEARCH_MAX_DEPTH = 16
+  const SEARCH_SKIP = new Set(['.git', '.codex-rescue', '.cache', 'node_modules', '.next', '.turbo'])
+  const SEARCH_SKIP_RE = /^(\.?venv|env|.*_env|site-packages|__pycache__|\.git)$/i
+
+  // 命中排序：产物/打包路径靠后，路径越短（越接近源码）越靠前
+  const matchScore = (rel) => {
+    let s = String(rel).length
+    if (/\/dist\/|\/build\/|\/standalone\/|\.app\/Contents|\.next\/|out\//.test(rel)) s += 100000
+    return s
+  }
+
+  const findFiles = async (root, query, max) => {
+    const q = String(query || '').trim().toLowerCase()
+    const matches = []
+    if (!q || !root) return matches
+    let budget = SEARCH_MAX_ENTRIES
+    const walk = async (abs, rel, depth) => {
+      if (matches.length >= max || budget <= 0 || depth > SEARCH_MAX_DEPTH) return
+      let entries
+      try {
+        const t = await ctx.fs.resolve(abs)
+        entries = await ctx.fs.listDir(t)
+      } catch (e) { return }
+      for (const e of entries || []) {
+        if (matches.length >= max || budget <= 0) return
+        budget -= 1
+        if (SEARCH_SKIP.has(e.name) || SEARCH_SKIP_RE.test(e.name)) continue
+        const rel2 = rel ? rel + '/' + e.name : e.name
+        if (e.type === 'directory') await walk(abs + '/' + e.name, rel2, depth + 1)
+        else if (e.name.toLowerCase().includes(q)) matches.push({ name: e.name, rel: rel2 })
+      }
+    }
+    try { await walk(root, '', 0) } catch (e) { /* noop */ }
+    matches.sort((a, b) => matchScore(a.rel) - matchScore(b.rel))
+    return matches
+  }
+
+  const relHref = (sid, rel) => '/__dsh-preview/' + encodeURIComponent(sid) + '/' +
+    String(rel).split('/').map(encodeURIComponent).join('/')
+
+  const render404 = (res, rel, root, sid, autoHits, findQuery, findResults) => {
+    const hitsHtml = findQuery
+      ? (findResults && findResults.length
+          ? '<p class="sec">搜索结果（' + findResults.length + '）：</p>' + findResults.map((m) =>
+              '<a class="hit" href="' + relHref(sid, m.rel) + '">📄 ' + escHtml(m.rel) + '</a>').join('')
+          : '<p class="none">未找到匹配文件</p>')
+      : (autoHits && autoHits.length
+          ? '<p class="sec">同名文件（工作区搜索）：</p>' + autoHits.map((m) =>
+              '<a class="hit" href="' + relHref(sid, m.rel) + '">📄 ' + escHtml(m.rel) + '</a>').join('')
+          : '')
     const html = '<!doctype html><html><head><meta charset="utf-8"><title>文件不存在</title><style>' +
       'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0d1117;color:#e6edf3;font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
-      '.card{max-width:560px;width:calc(100% - 48px);padding:28px 32px;background:#161b22;border:1px solid #30363d;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.35)}' +
+      '.card{max-width:600px;width:calc(100% - 48px);padding:28px 32px;background:#161b22;border:1px solid #30363d;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.35)}' +
       'h1{font-size:16px;color:#ff9d9d;margin:0 0 10px}' +
       'code{background:#21262d;border-radius:6px;padding:2px 8px;font-size:12px;word-break:break-all;color:#9fe8a8}' +
       'p{color:#8b949e;margin:8px 0;font-size:13px}' +
       '.root{color:#484f58;font-size:11px;word-break:break-all}' +
+      '.find{display:flex;gap:8px;margin:14px 0 4px}' +
+      '.find input{flex:1;min-width:0;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:7px 10px;font-size:13px;outline:none}' +
+      '.find input:focus{border-color:#4f8cff}' +
+      '.find button{background:#4f8cff;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer}' +
+      '.sec{color:#8b949e;font-size:12px;margin:10px 0 4px}' +
+      '.hit{display:block;background:#21262d;border:1px solid #30363d;border-radius:8px;padding:6px 10px;margin:4px 0;color:#9fe8a8;font:12px ui-monospace,Menlo,monospace;text-decoration:none;word-break:break-all}' +
+      '.hit:hover{border-color:#4f8cff;color:#4f8cff}' +
+      '.none,.err{color:#8b949e;font-size:12px;margin:6px 0}' +
       '</style></head><body><div class="card"><h1>⚠ 文件不存在</h1>' +
       '<p><code>' + escHtml(rel || '/') + '</code></p>' +
       '<p>预览根目录中找不到该文件（可能尚未创建，或路径来自其他项目）。</p>' +
       '<p class="root">根目录：' + escHtml(root || '未设置') + '</p>' +
-      '<p>提示：点面板 ⋮ 菜单 →「📁 根目录设置」可切换到文件所在目录；或让 AI 先生成该文件。</p>' +
+      '<form class="find" action="" method="get"><input name="find" value="' + escHtml(findQuery || '') + '" placeholder="在工作区中按文件名搜索…" autocomplete="off"><button type="submit">搜索</button></form>' +
+      '<div id="wvp-hits">' + hitsHtml + '</div>' +
+      '<p>提示：点面板 ⋮ 菜单 →「📁 根目录设置」可切换目录；或在上方搜索后点击打开。</p>' +
       '</div></body></html>'
     res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' })
     res.end(html)
@@ -167,7 +228,7 @@ export function apply(ctx) {
   }
 
   // ---------- 静态文件服务 ----------
-  async function serveStatic(req, res, segs, sess) {
+  async function serveStatic(req, res, segs, sess, sid, findQuery) {
     const root = sess.root
     const abs = segs.length ? root + '/' + segs.join('/') : root
     let entry = await tryStat(abs)
@@ -176,8 +237,25 @@ export function apply(ctx) {
       const alt = await tryStat(root + '/' + segs[segs.length - 1])
       if (alt && alt.info.type === 'file') entry = alt
     }
+    const notFound = async () => {
+      // 表单搜索（?find=...）→ 服务端渲染结果；否则按同名自动搜索工作区
+      let searchResults = null
+      if (findQuery) {
+        searchResults = await findFiles(root, findQuery, 30)
+      }
+      let hits = []
+      if (!findQuery) {
+        const name = segs.length ? segs[segs.length - 1] : ''
+        if (name) {
+          const dot = name.lastIndexOf('.')
+          const q = dot > 0 ? name.slice(0, dot) : name
+          hits = await findFiles(root, q, 8)
+        }
+      }
+      render404(res, segs.join('/') || '/', root, sid, hits, findQuery, searchResults)
+    }
     if (!entry) {
-      render404(res, segs.join('/') || '/', root)
+      await notFound()
       return
     }
     let target = entry.t
@@ -185,7 +263,7 @@ export function apply(ctx) {
     if (info.type === 'directory') {
       const idx = await tryStat(abs + '/index.html')
       if (!idx || idx.info.type !== 'file') {
-        render404(res, segs.join('/') || '/', root)
+        await notFound()
         return
       }
       target = idx.t
@@ -197,7 +275,7 @@ export function apply(ctx) {
     }
     const rootT = await ctx.fs.resolve(root)
     if (!ctx.fs.contains(rootT, target)) {
-      render404(res, segs.join('/') || '/', root)
+      await notFound()
       return
     }
     const name = segs.length ? segs[segs.length - 1] : 'index.html'
@@ -360,19 +438,48 @@ export function apply(ctx) {
     const sess = getSession(args && args.sid)
     const path = args && typeof args.path === 'string' ? args.path.trim() : ''
     if (!sess.root || !path) return { ok: false, error: '路径无效' }
+    const baseUrl = base + '/' + (args && args.sid ? args.sid : '__root__')
     if (path.indexOf(sess.root) === 0) {
       const rel = path.slice(sess.root.length).replace(/^\/+/, '')
       if (rel) {
         const e = await tryStat(sess.root + '/' + rel)
-        if (e && e.info.type === 'file') return { ok: true, url: base + '/' + (args && args.sid ? args.sid : '__root__') + '/' + rel }
+        if (e && e.info.type === 'file') return { ok: true, url: baseUrl + '/' + rel }
       }
     }
     const name = path.split(/[\\/]/).pop()
     if (name) {
       const e = await tryStat(sess.root + '/' + name)
-      if (e && e.info.type === 'file') return { ok: true, url: base + '/' + (args && args.sid ? args.sid : '__root__') + '/' + name }
+      if (e && e.info.type === 'file') return { ok: true, url: baseUrl + '/' + name }
+    }
+    // 路径在磁盘上存在但不在预览根目录内 → 建议切换根目录后打开
+    if (name && path.startsWith('/')) {
+      const disk = await tryStat(path)
+      if (disk && disk.info.type === 'file') {
+        const dir = path.slice(0, path.lastIndexOf('/'))
+        return { ok: false, error: '文件在工作区外，可切换根目录后打开', suggestRoot: dir, file: name }
+      }
+    }
+    // 根目录内按同名搜索回退（路径可能来自其他项目，但同名文件在工作区里）
+    if (name) {
+      const dot = name.lastIndexOf('.')
+      const q = dot > 0 ? name.slice(0, dot) : name
+      const hits = await findFiles(sess.root, q, 8)
+      const files = hits.filter((h) => h.name.toLowerCase() === name.toLowerCase())
+      const pool = files.length ? files : hits
+      if (pool.length) {
+        return { ok: true, url: baseUrl + '/' + pool[0].rel, note: pool.length > 1 ? '工作区中找到 ' + pool.length + ' 个同名文件，已打开第一个' : '已打开工作区中的同名文件' }
+      }
     }
     return { ok: false, error: '文件不在预览根目录内: ' + path }
+  }
+
+  api['find-file'] = async (args) => {
+    const sess = getSession(args && args.sid)
+    if (!sess.root) return { ok: false, error: '预览根目录未设置' }
+    const query = args && typeof args.query === 'string' ? args.query : ''
+    const max = Math.min(Number(args && args.max) || 30, 100)
+    const matches = await findFiles(sess.root, query, max)
+    return { ok: true, matches, truncated: matches.length >= max }
   }
 
   api['detect-project'] = async (args) => {
@@ -478,6 +585,11 @@ export function apply(ctx) {
 
   // ---------- 统一入口：GET/HEAD 静态服务；POST /api JSON RPC ----------
   async function handle(req, res) {
+    // 404 页表单搜索参数（?find=...）
+    let findQuery = ''
+    try {
+      findQuery = String(new URL(req.url || '/', 'http://x').searchParams.get('find') || '')
+    } catch (e) { /* noop */ }
     const raw = (req.url || '/').split('?')[0].split('#')[0]
     let decoded
     try {
@@ -531,7 +643,7 @@ export function apply(ctx) {
       res.end('preview root is not set')
       return
     }
-    await serveStatic(req, res, segs, sess)
+    await serveStatic(req, res, segs, sess, sid, findQuery)
   }
 
   // ---------- 外部站点代理预览（GitHub 等拒绝 iframe 嵌入的站点） ----------
