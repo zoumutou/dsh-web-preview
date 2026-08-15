@@ -728,6 +728,7 @@ function apply(ctx) {
     const marks = p.model.get().pendingMarks || []
     const draft = props.useInput((s) => s.draft)
     const prevRef = React.useRef(null)
+    // marks 变化 → 同步草稿（新增追加 / 删除移除）
     React.useEffect(() => {
       const prev = prevRef.current
       const curIds = marks.map((m) => m.id)
@@ -749,6 +750,12 @@ function apply(ctx) {
       props.inputActions.setDraft(next)
       prevRef.current = curIds
     }, [marks])
+    // 草稿清空/不再包含标记内容（用户删除或已发送）→ 气泡一并消失
+    React.useEffect(() => {
+      if (!marks.length) return
+      const contains = marks.some((m) => m.payload && draft.includes(m.payload))
+      if (!contains) p.model.set({ pendingMarks: [] })
+    }, [draft])
     if (!marks.length) return null
     return React.createElement('div', { className: 'wvp-dock' },
       React.createElement('span', { className: 'wvp-dock-label' }, '待发送标记'),
