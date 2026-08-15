@@ -727,11 +727,9 @@ function apply(ctx) {
 
   // ---------- 对话框直接拖入文件 ----------
   // 图片单独拖入时走 DSH 原生图片附件轨（不动它）；含非图片文件的拖入
-  // 由本插件接管：文本文件内容内嵌进草稿，二进制/超大文件上传到工作区
-  // .dsh-drops/ 后以路径引用。
+  // 由本插件接管：所有文件一律保存到工作区 .dsh-drops/，草稿只写路径引用
+  // （对话框保持干净，AI 按需通过文件系统读取内容）。
   const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
-  const TEXT_EMBED_MAX = 256 * 1024
-  const TRUNCATE_CHARS = 200000
 
   const fmtSize = (n) => {
     const v = Number(n) || 0
@@ -740,39 +738,7 @@ function apply(ctx) {
     return (v / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  const LANG_BY_EXT = {
-    md: 'markdown', markdown: 'markdown', js: 'javascript', mjs: 'javascript', cjs: 'javascript',
-    jsx: 'jsx', ts: 'typescript', tsx: 'tsx', json: 'json', jsonc: 'json', yml: 'yaml', yaml: 'yaml',
-    toml: 'toml', xml: 'xml', html: 'html', htm: 'html', css: 'css', scss: 'scss', less: 'less',
-    py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java', c: 'c', h: 'c', cpp: 'cpp',
-    hpp: 'cpp', cs: 'csharp', php: 'php', swift: 'swift', kt: 'kotlin', sql: 'sql', sh: 'bash',
-    bash: 'bash', zsh: 'bash', ini: 'ini', conf: 'ini', env: 'ini', vue: 'vue', svelte: 'svelte',
-    csv: 'csv', diff: 'diff', patch: 'diff', dockerfile: 'dockerfile', graphql: 'graphql', gql: 'graphql'
-  }
-  const fileLang = (name) => {
-    const dot = String(name || '').lastIndexOf('.')
-    const ext = dot >= 0 ? String(name).slice(dot + 1).toLowerCase() : ''
-    return LANG_BY_EXT[ext] || ''
-  }
-
-  const TEXT_MIMES = [
-    'text/', 'application/json', 'application/ld+json', 'application/x-ndjson', 'application/xml',
-    'application/javascript', 'application/x-javascript', 'application/typescript', 'application/x-typescript',
-    'application/x-yaml', 'application/yaml', 'application/x-sh', 'application/x-httpd-php',
-    'application/sql', 'application/csv'
-  ]
-  const TEXT_EXT_RE = /\.(txt|md|markdown|json|jsonc|ya?ml|toml|xml|csv|tsv|log|js|mjs|cjs|jsx|ts|tsx|css|scss|sass|less|html?|htm|py|rb|go|rs|java|c|cpp|cc|h|hpp|cs|php|swift|kt|kts|sql|sh|bash|zsh|fish|env|ini|conf|cfg|properties|vue|svelte|gitignore|dockerfile|lock|graphql|gql|srt|vtt|diff|patch|editorconfig|npmrc|gitattributes)$/i
-  const looksTextual = (f) =>
-    (f.type && TEXT_MIMES.some((m) => (m.endsWith('/') ? f.type.startsWith(m) : f.type === m))) ||
-    TEXT_EXT_RE.test(f.name || '')
-
-  const isBinaryText = (text) => {
-    if (/\u0000/.test(text)) return true
-    const bad = (text.match(/\uFFFD/g) || []).length
-    return text.length > 0 && bad / text.length > 0.01
-  }
-
-  // 二进制/超大文件 → 上传到工作区 .dsh-drops/
+  // 文件 → 上传到工作区 .dsh-drops/
   const uploadDrop = async (file, sid) => {
     const res = await fetch('/__dsh-preview/upload', {
       method: 'POST',
@@ -798,29 +764,19 @@ function apply(ctx) {
     const size = file.size || 0
     const type = file.type || 'application/octet-stream'
     const sizeTxt = fmtSize(size)
-    // 混合拖入里的图片：仅记录元数据（图片单独拖入走原生附件轨）
+    const up = await uploadDrop(file, sid)
+    // 混合拖入里的图片：同样保存为文件引用（图片单独拖入走原生附件轨）
     if (IMAGE_TYPES.has(type)) {
       return {
-        id, kind: 'image', chipText: name + '（' + sizeTxt + '）',
-        payload: '🖼 拖入图片：' + name + '（' + sizeTxt + ' · ' + type + '）\n（混合拖入时图片仅记录元数据；如需发送图片内容，请单独拖入图片）'
+        id, kind: 'image', chipText: name + '（' + sizeTxt + '）', path: up.abs,
+        payload: '🖼 拖入图片：' + name + '（' + sizeTxt + ' · ' + type + '）\n已保存到工作区：' + up.abs +
+          '\n（混合拖入时图片保存为文件引用；如需以原图发送，请单独拖入图片）'
       }
     }
-    if (size <= TEXT_EMBED_MAX && looksTextual(file)) {
-      let text = null
-      try { text = await file.text() } catch (e) { /* 读取失败则走上传 */ }
-      if (text !== null && !isBinaryText(text)) {
-        const truncated = text.length > TRUNCATE_CHARS
-        const body = truncated ? text.slice(0, TRUNCATE_CHARS) : text
-        const head = '📎 拖入文件：' + name + '（' + sizeTxt + ' · ' + type + '）' +
-          (truncated ? '（内容过长，仅保留前 ' + TRUNCATE_CHARS + ' 字符）' : '')
-        return { id, kind: 'text', chipText: name + '（' + sizeTxt + '）', payload: head + '\n```' + fileLang(name) + '\n' + body + '\n```' }
-      }
-    }
-    const up = await uploadDrop(file, sid)
     return {
       id, kind: 'upload', chipText: name + '（' + sizeTxt + '）', path: up.abs,
       payload: '📎 拖入文件：' + name + '（' + sizeTxt + ' · ' + type + '）\n已保存到工作区：' + up.abs +
-        '\n（文件为二进制或较大，未内嵌内容；AI 可直接读取该文件路径）'
+        '\n（文件内容未内嵌，AI 可直接读取该文件路径）'
     }
   }
 
@@ -842,45 +798,60 @@ function apply(ctx) {
     const dt = e && e.dataTransfer
     return !!(dt && Array.prototype.indexOf.call(dt.types || [], 'Files') !== -1)
   }
-  const dragHasNonImage = (e) => {
+  // 拖拽过程中无法查看具体文件类型（部分浏览器/来源 items 为空）→ 一律接管，
+  // 避免 DSH 原生“拖入图片”覆盖层被错误激活后卡死
+  const shouldIntercept = (e) => {
     const dt = e && e.dataTransfer
-    if (!dt || !dt.items) return false
-    const items = Array.from(dt.items)
-    if (!items.length) return false
+    if (!dt) return false
+    const items = dt.items ? Array.from(dt.items) : []
+    if (items.length === 0) return true
     return items.some((it) => it.kind === 'file' && !IMAGE_TYPES.has(it.type))
   }
   let fileDragDepth = 0
   const onFileDragEnter = (e) => {
-    if (!hasFiles(e) || !dragHasNonImage(e)) return
+    if (!hasFiles(e) || !shouldIntercept(e)) return
     e.preventDefault()
     e.stopPropagation()
     fileDragDepth += 1
     fileDragStore.set(true)
   }
   const onFileDragOver = (e) => {
-    if (!hasFiles(e) || !dragHasNonImage(e)) return
+    if (!hasFiles(e) || !shouldIntercept(e)) return
     e.preventDefault()
     e.stopPropagation()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
   }
   const onFileDragLeave = (e) => {
     if (!hasFiles(e)) return
-    e.preventDefault()
-    e.stopPropagation()
-    fileDragDepth = Math.max(0, fileDragDepth - 1)
-    if (fileDragDepth === 0) fileDragStore.set(false)
+    // 仅处理被本插件接管的拖拽；纯图片等未接管拖拽不干预，让原生逻辑自行跟踪
+    if (fileDragDepth > 0) {
+      e.preventDefault()
+      e.stopPropagation()
+      fileDragDepth -= 1
+      if (fileDragDepth === 0) {
+        fileDragStore.set(false)
+        // 兜底：清掉原生覆盖层可能残留的状态（其 window dragend 监听会 reset）
+        window.dispatchEvent(new Event('dragend'))
+      }
+    }
   }
   const onFileDragEnd = () => { fileDragDepth = 0; fileDragStore.set(false) }
   const onFileDrop = (e) => {
     if (!hasFiles(e)) return
     const files = e.dataTransfer ? Array.from(e.dataTransfer.files || []) : []
     if (!files.length) return
-    // 全部为图片 → 交给 DSH 原生图片附件轨
-    if (files.every((f) => IMAGE_TYPES.has(f.type))) return
+    // 全部为图片 → 交给 DSH 原生图片附件轨（其 drop 处理器会自行 preventDefault 并重置覆盖层）
+    if (files.every((f) => IMAGE_TYPES.has(f.type))) {
+      fileDragDepth = 0
+      fileDragStore.set(false)
+      return
+    }
     e.preventDefault()
     e.stopPropagation()
     fileDragDepth = 0
     fileDragStore.set(false)
+    // 兜底：若原生“拖入图片”覆盖层此前被误激活（items 为空等），用合成 dragend 触发其 reset
+    window.dispatchEvent(new Event('dragend'))
     const dw = draftWriter
     if (!dw) return
     const p = getPanel(dw.sid)
@@ -994,7 +965,7 @@ function apply(ctx) {
     React.useEffect(() => fileDragStore.sub(() => force((x) => x + 1)), [])
     if (!fileDragStore.get()) return null
     return React.createElement('div', { className: 'wvp-drop-ovl', role: 'status' },
-      React.createElement('span', { className: 'wvp-drop-ovl-inner' }, '📎 松开以将文件加入对话'))
+      React.createElement('span', { className: 'wvp-drop-ovl-inner' }, '📎 松开将文件保存到工作区并加入对话'))
   }
 
   const useSub = (pub) => {
