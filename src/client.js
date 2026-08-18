@@ -170,7 +170,13 @@ function apply(ctx) {
     if (!s) return null
     if (/^https?:\/\//i.test(s)) return s
     if (s.startsWith('/')) return base + s
-    if (/^[\w\-.]+(\.html?)?$/i.test(s)) return base + '/' + s
+    // 纯文件名（含 CJK，如 候选批准总文档.md）
+    if (/^[\w\p{L}\p{M}\p{N}\-.]+(\.html?)?$/iu.test(s)) return base + '/' + s
+    // 相对路径（如 docs/候选批准总文档.md、./候选.md）：
+    // 首段不含点才视为本地相对路径，避免把 github.com/... 之类域名输入误判
+    const first = s.split('/')[0]
+    const isRel = s.startsWith('./') || s.startsWith('../') || (s.includes('/') && first.indexOf('.') === -1)
+    if (isRel) return base + '/' + s.replace(/^\.?\//, '')
     return 'http://' + s
   }
 
@@ -198,7 +204,10 @@ function apply(ctx) {
   }
 
   // ---------- 对话内纯文本路径 → 可点击链接 ----------
-  const TEXTLINK_RE = /(?<![\w@.])(?:(?:\/Users\/|\/home\/|~\/|[A-Za-z]:[\\/]|\.{0,2}\/)?[\w@][\w@./-]*\.(?:md|markdown|html?|mjs|cjs|jsx?|tsx?|rs|py|go|json|css|scss|sass|less|png|jpe?g|gif|svg|webp|ico|txt|toml|ya?ml|sh|bash|zsh|sql|pdf|xml|log|vue|svelte|java|c|cpp|h|hpp|php|rb|swift|kt|cs|ini|conf|env|webmanifest))(?![\w@./-])/g
+  // 支持 CJK/非 ASCII 文件名（如 docs/候选批准总文档.md）：
+  // 主体字符类加入 Unicode 字母/组合符/数字（\p{L}\p{M}\p{N}，u 标志），
+  // 边界断言保持 ASCII 判定，避免「看docs/a.md」这类前接中文时丢前缀。
+  const TEXTLINK_RE = /(?<![\w@.])(?:(?:\/Users\/|\/home\/|~\/|[A-Za-z]:[\\/]|\.{0,2}\/)?[\w@\p{L}\p{M}\p{N}][\w@.\/\-\p{L}\p{M}\p{N}]*\.(?:md|markdown|html?|mjs|cjs|jsx?|tsx?|rs|py|go|json|css|scss|sass|less|png|jpe?g|gif|svg|webp|ico|txt|toml|ya?ml|sh|bash|zsh|sql|pdf|xml|log|vue|svelte|java|c|cpp|h|hpp|php|rb|swift|kt|cs|ini|conf|env|webmanifest))(?![\w@./-])/giu
 
   const hasTextlinkAncestor = (el) => {
     let n = el
