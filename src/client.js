@@ -8,75 +8,99 @@
 const inject = ['timer']
 
 const PANEL_CSS = `
-.wvp-play { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; background:transparent; border:none; color:var(--dsw-alias-label-secondary, #9aa0a6); cursor:pointer; }
-.wvp-play:hover { background:var(--dsw-alias-bg-layer-1, rgba(128,128,128,.15)); color:var(--dsw-alias-label-primary, #e8eaed); }
-.wvp-play.is-active { color:var(--dsw-alias-brand-primary, #4f8cff); }
+/* 主题跟随：优先消费 DSH 语义 token（--dsw-alias-*，由 ui-theme 在
+   body[data-ds-dark-theme] 上切换），无 token 时回退为夜间样式（默认夜间）。
+   --wvp-* 定义在 body 上，供面板、输入区 dock 气泡、拖放浮层共用。 */
+body {
+  --wvp-accent: var(--dsw-alias-state-business-primary, #4f8cff);
+  --wvp-text-1: var(--dsw-alias-label-primary, #e8eaed);
+  --wvp-text-2: var(--dsw-alias-label-secondary, #9aa0a6);
+  --wvp-border-1: var(--dsw-alias-border-l1, rgba(255,255,255,.07));
+  --wvp-border-2: var(--dsw-alias-border-l2, rgba(255,255,255,.12));
+  --wvp-border-3: var(--dsw-alias-border-l3, rgba(255,255,255,.18));
+  --wvp-soft: color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 18%, transparent);
+  --wvp-soft-2: color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 30%, transparent);
+  --wvp-strong: color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 60%, transparent);
+  --wvp-glass: color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 30%, transparent);
+  --wvp-hairline: color-mix(in srgb, var(--dsw-alias-label-primary, #e8eaed) 32%, transparent);
+  --wvp-hairline-soft: color-mix(in srgb, var(--dsw-alias-label-primary, #e8eaed) 11%, transparent);
+}
+.wvp-play { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; background:transparent; border:none; color:var(--wvp-text-2, #9aa0a6); cursor:pointer; }
+.wvp-play:hover { background:var(--dsw-alias-bg-layer-1, rgba(128,128,128,.15)); color:var(--wvp-text-1, #e8eaed); }
+.wvp-play.is-active { color:var(--wvp-accent, #4f8cff); }
 .wvp-play svg { width:15px; height:15px; flex:none; }
-.wvp-root { position:fixed; top:10px; right:10px; bottom:10px; z-index:1000; display:flex; flex-direction:column; border-radius:14px; overflow:hidden; background:color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 30%, transparent); -webkit-backdrop-filter:blur(34px) saturate(200%); backdrop-filter:blur(34px) saturate(200%); border:1px solid rgba(255,255,255,.10); box-shadow:0 12px 40px rgba(0,0,0,.20), inset 0 0 0 1px rgba(255,255,255,.03); color:var(--dsw-alias-label-primary, #e8eaed); font-size:13px; }
-.wvp-root::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; z-index:6; background:linear-gradient(90deg, transparent, rgba(255,255,255,.35), rgba(255,255,255,.12), rgba(255,255,255,.35), transparent); }
+.wvp-root { position:fixed; top:10px; right:10px; bottom:10px; z-index:1000; display:flex; flex-direction:column; border-radius:14px; overflow:hidden; color-scheme:light; background:var(--wvp-glass, rgba(23,26,33,.3)); -webkit-backdrop-filter:blur(34px) saturate(200%); backdrop-filter:blur(34px) saturate(200%); border:1px solid var(--wvp-border-2, rgba(255,255,255,.12)); box-shadow:0 12px 40px rgba(0,0,0,.20), inset 0 0 0 1px var(--wvp-border-1, rgba(255,255,255,.07)); color:var(--wvp-text-1, #e8eaed); font-size:13px; }
+body[data-ds-dark-theme] .wvp-root { color-scheme:dark; }
+body:not([data-ds-dark-theme]) .wvp-root { box-shadow:0 12px 40px rgba(0,0,0,.16), inset 0 0 0 1px var(--wvp-border-1, rgba(0,0,0,.06)); }
+.wvp-root::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; z-index:6; background:linear-gradient(90deg, transparent, var(--wvp-hairline, rgba(255,255,255,.35)), var(--wvp-hairline-soft, rgba(255,255,255,.12)), var(--wvp-hairline, rgba(255,255,255,.35)), transparent); }
 .wvp-handle { position:absolute; left:0; top:0; bottom:0; width:10px; margin-left:-5px; cursor:col-resize; z-index:5; touch-action:none; }
-.wvp-handle::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:12px; height:36px; border-radius:10px; background:rgba(255,255,255,.35); border:1px solid rgba(255,255,255,.25); opacity:0; transition:opacity .15s; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.wvp-handle::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:12px; height:36px; border-radius:10px; background:var(--wvp-hairline, rgba(255,255,255,.35)); border:1px solid var(--wvp-border-2, rgba(255,255,255,.25)); opacity:0; transition:opacity .15s; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
 .wvp-root:hover .wvp-handle::after, .wvp-handle:hover::after, .wvp-handle[data-dragging='true']::after { opacity:1; }
-.wvp-toolbar { position:relative; display:flex; align-items:center; gap:5px; padding:10px 10px 8px; border-bottom:1px solid rgba(255,255,255,.07); background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 60%); }
-.wvp-toolbar::after { content:''; position:absolute; top:0; left:16px; right:16px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,255,255,.35), rgba(255,255,255,.1), rgba(255,255,255,.35), transparent); }
+.wvp-toolbar { position:relative; display:flex; align-items:center; gap:5px; padding:10px 10px 8px; border-bottom:1px solid var(--wvp-border-1, rgba(255,255,255,.07)); background:linear-gradient(180deg, var(--wvp-hairline-soft, rgba(255,255,255,.06)), rgba(255,255,255,0) 60%); }
+.wvp-toolbar::after { content:''; position:absolute; top:0; left:16px; right:16px; height:1px; background:linear-gradient(90deg, transparent, var(--wvp-hairline, rgba(255,255,255,.35)), var(--wvp-hairline-soft, rgba(255,255,255,.1)), var(--wvp-hairline, rgba(255,255,255,.35)), transparent); }
 .wvp-toolbar .wvp-input { flex:1; min-width:0; }
-.wvp-icobtn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:8px; background:transparent; border:none; color:var(--dsw-alias-label-secondary, #9aa0a6); cursor:pointer; font-size:14px; line-height:1; padding:0; }
-.wvp-icobtn:hover { background:rgba(255,255,255,.10); color:var(--dsw-alias-label-primary, #e8eaed); }
-.wvp-icobtn.is-active { color:var(--dsw-alias-brand-primary, #4f8cff); }
-.wvp-input { background:color-mix(in srgb, var(--dsw-alias-bg-base, #0d1117) 35%, transparent); color:var(--dsw-alias-label-primary, #e8eaed); border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:4px 9px; font-size:12px; outline:none; -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
-.wvp-input:focus { border-color:var(--dsw-alias-brand-primary, #4f8cff); }
-.wvp-btn { background:rgba(255,255,255,.08); color:var(--dsw-alias-label-primary, #e8eaed); border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:12px; white-space:nowrap; }
-.wvp-btn:hover { border-color:var(--dsw-alias-brand-primary, #4f8cff); color:var(--dsw-alias-brand-primary, #4f8cff); }
-.wvp-btn.primary { background:var(--dsw-alias-brand-primary, #4f8cff); border-color:transparent; color:#fff; }
+.wvp-icobtn { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:8px; background:transparent; border:none; color:var(--wvp-text-2, #9aa0a6); cursor:pointer; font-size:14px; line-height:1; padding:0; }
+.wvp-icobtn:hover { background:var(--wvp-soft-2, rgba(255,255,255,.10)); color:var(--wvp-text-1, #e8eaed); }
+.wvp-icobtn.is-active { color:var(--wvp-accent, #4f8cff); }
+.wvp-input { background:color-mix(in srgb, var(--dsw-alias-bg-base, #0d1117) 35%, transparent); color:var(--wvp-text-1, #e8eaed); border:1px solid var(--wvp-border-2, rgba(255,255,255,.12)); border-radius:8px; padding:4px 9px; font-size:12px; outline:none; -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+.wvp-input:focus { border-color:var(--wvp-accent, #4f8cff); }
+.wvp-btn { background:var(--wvp-soft-2, rgba(255,255,255,.08)); color:var(--wvp-text-1, #e8eaed); border:1px solid var(--wvp-border-3, rgba(255,255,255,.14)); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:12px; white-space:nowrap; }
+.wvp-btn:hover { border-color:var(--wvp-accent, #4f8cff); color:var(--wvp-accent, #4f8cff); }
+.wvp-btn.primary { background:var(--wvp-accent, #4f8cff); border-color:transparent; color:#fff; }
 .wvp-btn.primary:hover { opacity:.9; color:#fff; }
 .wvp-btn.danger { color:var(--dsw-alias-state-error-primary, #ff6b6b); }
 .wvp-menu-wrap { position:relative; }
-.wvp-menu { position:absolute; right:0; top:calc(100% + 6px); min-width:196px; border-radius:12px; padding:5px; z-index:1100; display:flex; flex-direction:column; gap:1px; background:color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 62%, transparent); -webkit-backdrop-filter:blur(30px) saturate(200%); backdrop-filter:blur(30px) saturate(200%); border:1px solid rgba(255,255,255,.12); box-shadow:0 12px 36px rgba(0,0,0,.28); }
-.wvp-menu-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; color:var(--dsw-alias-label-primary, #e8eaed); background:transparent; border:none; text-align:left; width:100%; }
-.wvp-menu-item:hover { background:rgba(255,255,255,.08); }
+.wvp-menu { position:absolute; right:0; top:calc(100% + 6px); min-width:196px; border-radius:12px; padding:5px; z-index:1100; display:flex; flex-direction:column; gap:1px; background:var(--wvp-strong, rgba(23,26,33,.62)); -webkit-backdrop-filter:blur(30px) saturate(200%); backdrop-filter:blur(30px) saturate(200%); border:1px solid var(--wvp-border-3, rgba(255,255,255,.12)); box-shadow:0 12px 36px rgba(0,0,0,.28); }
+.wvp-menu-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; color:var(--wvp-text-1, #e8eaed); background:transparent; border:none; text-align:left; width:100%; }
+.wvp-menu-item:hover { background:var(--dsw-alias-interactive-bg-hover, rgba(255,255,255,.08)); }
 .wvp-menu-item.danger { color:var(--dsw-alias-state-error-primary, #ff6b6b); }
-.wvp-menu-sep { height:1px; background:rgba(255,255,255,.10); margin:3px 6px; }
+.wvp-menu-sep { height:1px; background:var(--wvp-border-2, rgba(255,255,255,.10)); margin:3px 6px; }
 .wvp-menu-root { display:flex; gap:6px; padding:4px 8px 8px; }
 .wvp-menu-root .wvp-input { flex:1; min-width:0; font-size:11px; }
-.wvp-pages-body { padding:8px 10px 10px; display:flex; flex-direction:column; gap:7px; max-height:26%; overflow:auto; background:rgba(255,255,255,.04); border-bottom:1px solid rgba(255,255,255,.07); }
-.wvp-proj { padding:6px 10px; display:flex; flex-direction:column; gap:5px; border-bottom:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.04); }
-.wvp-proj-row { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--dsw-alias-label-secondary, #9aa0a6); flex-wrap:wrap; }
-.wvp-proj-name { color:var(--dsw-alias-label-primary, #e8eaed); font-weight:600; }
-.wvp-proj-log { max-height:110px; overflow:auto; background:rgba(0,0,0,.35); border-radius:8px; padding:6px 8px; font:10px/1.5 ui-monospace,Menlo,monospace; color:#9fe8a8; white-space:pre-wrap; word-break:break-all; }
+.wvp-pages-body { padding:8px 10px 10px; display:flex; flex-direction:column; gap:7px; max-height:26%; overflow:auto; background:var(--wvp-soft, rgba(255,255,255,.04)); border-bottom:1px solid var(--wvp-border-1, rgba(255,255,255,.07)); }
+.wvp-proj { padding:6px 10px; display:flex; flex-direction:column; gap:5px; border-bottom:1px solid var(--wvp-border-1, rgba(255,255,255,.07)); background:var(--wvp-soft, rgba(255,255,255,.04)); }
+.wvp-proj-row { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--wvp-text-2, #9aa0a6); flex-wrap:wrap; }
+.wvp-proj-name { color:var(--wvp-text-1, #e8eaed); font-weight:600; }
+.wvp-proj-log { max-height:110px; overflow:auto; background:color-mix(in srgb, var(--dsw-alias-bg-base, #0d1117) 55%, transparent); border-radius:8px; padding:6px 8px; font:10px/1.5 ui-monospace,Menlo,monospace; color:#9fe8a8; white-space:pre-wrap; word-break:break-all; }
+body:not([data-ds-dark-theme]) .wvp-proj-log { background:rgba(0,0,0,.06); color:#0b6b3f; }
 .wvp-error { color:var(--dsw-alias-state-error-primary, #ff6b6b); font-size:11px; word-break:break-all; padding:5px 10px; }
-.wvp-hint { color:var(--dsw-alias-brand-primary, #4f8cff); font-size:11px; padding:5px 10px; }
-.wvp-suggest { display:flex; align-items:center; gap:8px; padding:7px 10px; background:rgba(79,140,255,.10); border-bottom:1px solid rgba(79,140,255,.30); font-size:11px; }
+.wvp-hint { color:var(--wvp-accent, #4f8cff); font-size:11px; padding:5px 10px; }
+.wvp-suggest { display:flex; align-items:center; gap:8px; padding:7px 10px; background:color-mix(in srgb, var(--wvp-accent, #4f8cff) 10%, transparent); border-bottom:1px solid color-mix(in srgb, var(--wvp-accent, #4f8cff) 30%, transparent); font-size:11px; }
 .wvp-suggest .wvp-btn { font-size:11px; padding:3px 10px; flex:none; }
-.wvp-crumbs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; color:var(--dsw-alias-label-secondary, #9aa0a6); font-size:11px; }
-.wvp-crumb { cursor:pointer; color:var(--dsw-alias-label-secondary, #9aa0a6); }
-.wvp-crumb:hover { color:var(--dsw-alias-brand-primary, #4f8cff); }
+.wvp-cands { display:flex; flex-direction:column; gap:4px; padding:7px 10px; background:var(--wvp-soft, rgba(255,255,255,.05)); border-bottom:1px solid var(--wvp-border-1, rgba(255,255,255,.07)); }
+.wvp-cands-head { color:var(--wvp-text-2, #9aa0a6); font-size:11px; }
+.wvp-cand { display:block; width:100%; text-align:left; background:transparent; border:1px solid var(--wvp-border-2, rgba(255,255,255,.12)); border-radius:8px; padding:5px 9px; font-size:11px; color:var(--wvp-text-1, #e8eaed); cursor:pointer; word-break:break-all; }
+.wvp-cand:hover { border-color:var(--wvp-accent, #4f8cff); color:var(--wvp-accent, #4f8cff); }
+.wvp-crumbs { display:flex; flex-wrap:wrap; gap:4px; align-items:center; color:var(--wvp-text-2, #9aa0a6); font-size:11px; }
+.wvp-crumb { cursor:pointer; color:var(--wvp-text-2, #9aa0a6); }
+.wvp-crumb:hover { color:var(--wvp-accent, #4f8cff); }
 .wvp-chips { display:flex; flex-wrap:wrap; gap:5px; }
-.wvp-chip { cursor:pointer; padding:3px 9px; border-radius:999px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.07); color:var(--dsw-alias-label-primary, #e8eaed); font-size:11px; }
-.wvp-chip:hover { border-color:var(--dsw-alias-brand-primary, #4f8cff); color:var(--dsw-alias-brand-primary, #4f8cff); }
-.wvp-chip.dir { border-style:dashed; color:var(--dsw-alias-label-secondary, #9aa0a6); }
-.wvp-sel { padding:7px 10px; display:flex; flex-direction:column; gap:5px; background:rgba(255,255,255,.05); border-bottom:1px solid rgba(255,255,255,.07); }
-.wvp-sel-sel { color:var(--dsw-alias-label-secondary, #9aa0a6); font-family:ui-monospace,Menlo,monospace; font-size:10px; word-break:break-all; }
+.wvp-chip { cursor:pointer; padding:3px 9px; border-radius:999px; border:1px solid var(--wvp-border-3, rgba(255,255,255,.14)); background:var(--wvp-soft, rgba(255,255,255,.07)); color:var(--wvp-text-1, #e8eaed); font-size:11px; }
+.wvp-chip:hover { border-color:var(--wvp-accent, #4f8cff); color:var(--wvp-accent, #4f8cff); }
+.wvp-chip.dir { border-style:dashed; color:var(--wvp-text-2, #9aa0a6); }
+.wvp-sel { padding:7px 10px; display:flex; flex-direction:column; gap:5px; background:var(--wvp-soft, rgba(255,255,255,.05)); border-bottom:1px solid var(--wvp-border-1, rgba(255,255,255,.07)); }
+.wvp-sel-sel { color:var(--wvp-text-2, #9aa0a6); font-family:ui-monospace,Menlo,monospace; font-size:10px; word-break:break-all; }
 .wvp-sel-text { font-size:11px; max-height:52px; overflow:auto; word-break:break-all; }
 .wvp-sel-actions { display:flex; gap:5px; flex-wrap:wrap; }
-.wvp-noteinput { background:color-mix(in srgb, var(--dsw-alias-bg-base, #0d1117) 40%, transparent); color:var(--dsw-alias-label-primary, #e8eaed); border:1px solid rgba(255,255,255,.12); border-radius:6px; padding:3px 7px; font-size:11px; outline:none; flex:1; min-width:120px; }
+.wvp-noteinput { background:color-mix(in srgb, var(--dsw-alias-bg-base, #0d1117) 40%, transparent); color:var(--wvp-text-1, #e8eaed); border:1px solid var(--wvp-border-2, rgba(255,255,255,.12)); border-radius:6px; padding:3px 7px; font-size:11px; outline:none; flex:1; min-width:120px; }
 .wvp-anns { display:flex; flex-direction:column; gap:3px; }
 .wvp-ann { display:flex; gap:6px; align-items:flex-start; font-size:11px; }
-.wvp-ann-sel { color:var(--dsw-alias-label-secondary, #9aa0a6); font-family:ui-monospace,Menlo,monospace; font-size:10px; word-break:break-all; max-width:40%; }
+.wvp-ann-sel { color:var(--wvp-text-2, #9aa0a6); font-family:ui-monospace,Menlo,monospace; font-size:10px; word-break:break-all; max-width:40%; }
 .wvp-ann-text { flex:1; word-break:break-all; }
-.wvp-frame-wrap { flex:1; min-height:0; position:relative; background:#fff; }
-.wvp-frame { width:100%; height:100%; border:none; display:block; background:#fff; }
-.wvp-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dsw-alias-label-secondary, #9aa0a6); }
-.wvp-textlink { color:var(--dsw-alias-brand-primary, #4f8cff); text-decoration:underline dotted; text-decoration-thickness:1px; text-underline-offset:2px; cursor:pointer; }
+.wvp-frame-wrap { flex:1; min-height:0; position:relative; background:var(--dsw-alias-bg-base, #fff); }
+.wvp-frame { width:100%; height:100%; border:none; display:block; background:var(--dsw-alias-bg-base, #fff); }
+.wvp-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--wvp-text-2, #9aa0a6); }
+.wvp-textlink { color:var(--wvp-accent, #4f8cff); text-decoration:underline dotted; text-decoration-thickness:1px; text-underline-offset:2px; cursor:pointer; }
 .wvp-textlink:hover { text-decoration-style:solid; opacity:.85; }
-.wvp-dock { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 12px; font-size:12px; border-bottom:1px solid rgba(255,255,255,.06); }
-.wvp-dock-label { color:var(--dsw-alias-label-secondary, #9aa0a6); font-size:11px; margin-right:2px; }
-.wvp-dock-chip { display:inline-flex; align-items:center; gap:6px; background:rgba(79,140,255,.16); border:1px solid rgba(79,140,255,.45); color:var(--dsw-alias-label-primary, #e8eaed); border-radius:999px; padding:3px 10px; font-size:11px; max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.wvp-dock-chip.file { background:rgba(52,168,83,.14); border-color:rgba(52,168,83,.45); }
-.wvp-dock-chip.err { background:rgba(255,107,107,.14); border-color:rgba(255,107,107,.5); }
-.wvp-dock-x { background:transparent; border:none; color:var(--dsw-alias-label-secondary, #9aa0a6); cursor:pointer; font-size:12px; padding:0 2px; flex:none; }
+.wvp-dock { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 12px; font-size:12px; border-bottom:1px solid var(--wvp-border-1, rgba(255,255,255,.06)); }
+.wvp-dock-label { color:var(--wvp-text-2, #9aa0a6); font-size:11px; margin-right:2px; }
+.wvp-dock-chip { display:inline-flex; align-items:center; gap:6px; background:color-mix(in srgb, var(--wvp-accent, #4f8cff) 14%, transparent); border:1px solid color-mix(in srgb, var(--wvp-accent, #4f8cff) 45%, transparent); color:var(--wvp-text-1, #e8eaed); border-radius:999px; padding:3px 10px; font-size:11px; max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wvp-dock-chip.file { background:color-mix(in srgb, var(--dsw-alias-state-success-primary, #22c55e) 14%, transparent); border-color:color-mix(in srgb, var(--dsw-alias-state-success-primary, #22c55e) 45%, transparent); }
+.wvp-dock-chip.err { background:color-mix(in srgb, var(--dsw-alias-state-error-primary, #ff6b6b) 14%, transparent); border-color:color-mix(in srgb, var(--dsw-alias-state-error-primary, #ff6b6b) 50%, transparent); }
+.wvp-dock-x { background:transparent; border:none; color:var(--wvp-text-2, #9aa0a6); cursor:pointer; font-size:12px; padding:0 2px; flex:none; }
 .wvp-dock-x:hover { color:var(--dsw-alias-state-error-primary, #ff6b6b); }
 .wvp-drop-ovl { position:fixed; inset:0; z-index:4000; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.wvp-drop-ovl-inner { display:inline-flex; align-items:center; gap:8px; padding:12px 24px; border-radius:999px; background:color-mix(in srgb, var(--dsw-alias-bg-overlay, #171a21) 80%, transparent); border:1px solid rgba(79,140,255,.55); color:var(--dsw-alias-label-primary, #e8eaed); font-size:14px; font-weight:500; box-shadow:0 10px 30px rgba(0,0,0,.28); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+.wvp-drop-ovl-inner { display:inline-flex; align-items:center; gap:8px; padding:12px 24px; border-radius:999px; background:var(--wvp-strong, rgba(23,26,33,.80)); border:1px solid color-mix(in srgb, var(--wvp-accent, #4f8cff) 55%, transparent); color:var(--wvp-text-1, #e8eaed); font-size:14px; font-weight:500; box-shadow:0 10px 30px rgba(0,0,0,.28); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
 `
 
 function injectStyles(css) {
@@ -107,7 +131,7 @@ function apply(ctx) {
     const state = {
       sid: '', base: '', root: null, dir: '', dirs: [], pages: [], url: '', error: null,
       marking: false, selected: null, annotationText: '', annotations: [], pendingMarks: [],
-      dropItems: [], suggest: null, note: null, width: 480, pagesOpen: false,
+      dropItems: [], suggest: null, candidates: [], note: null, width: 480, pagesOpen: false,
       project: { kind: null, name: '', cmd: null, running: false, starting: false, log: [], url: null, exitCode: null, detectError: null }
     }
     const subs = new Set()
@@ -117,6 +141,18 @@ function apply(ctx) {
       sub: (f) => { subs.add(f); return () => subs.delete(f) }
     }
   }
+  // 会话根元素 → sessionId 映射（点击时按 DOM 归属定位会话，避免新任务下 currentSid 滞后）
+  const sidByRoot = new WeakMap()
+
+  // 同名文件选择记忆：同一会话内重复打开同名文件时，自动沿用上次选择
+  const pathMemory = new Map()
+  const rememberPath = (sid, name, rel) => {
+    if (!name || !rel) return
+    pathMemory.set((sid || '__root__') + '::' + String(name).toLowerCase(), rel)
+  }
+  const rememberedPath = (sid, name) =>
+    pathMemory.get((sid || '__root__') + '::' + String(name || '').toLowerCase())
+
   const panels = new Map()
   const getPanel = (sid) => {
     const key = sid || '__root__'
@@ -207,7 +243,7 @@ function apply(ctx) {
   // 支持 CJK/非 ASCII 文件名（如 docs/候选批准总文档.md）：
   // 主体字符类加入 Unicode 字母/组合符/数字（\p{L}\p{M}\p{N}，u 标志），
   // 边界断言保持 ASCII 判定，避免「看docs/a.md」这类前接中文时丢前缀。
-  const TEXTLINK_RE = /(?<![\w@.])(?:(?:\/Users\/|\/home\/|~\/|[A-Za-z]:[\\/]|\.{0,2}\/)?[\w@\p{L}\p{M}\p{N}][\w@.\/\-\p{L}\p{M}\p{N}]*\.(?:md|markdown|html?|mjs|cjs|jsx?|tsx?|rs|py|go|json|css|scss|sass|less|png|jpe?g|gif|svg|webp|ico|txt|toml|ya?ml|sh|bash|zsh|sql|pdf|xml|log|vue|svelte|java|c|cpp|h|hpp|php|rb|swift|kt|cs|ini|conf|env|webmanifest))(?![\w@./-])/giu
+  const TEXTLINK_RE = /(?<![\w@.])(?:(?:\/Users\/|\/home\/|~\/|[A-Za-z]:[\\/]|\.{0,2}\/)?[\w@\p{L}\p{M}\p{N}][\w@.\/\-\p{L}\p{M}\p{N}\s%#+·：（）、]*\.(?:md|markdown|html?|mjs|cjs|jsx?|tsx?|rs|py|go|json|css|scss|sass|less|png|jpe?g|gif|svg|webp|ico|txt|toml|ya?ml|sh|bash|zsh|sql|pdf|xml|log|vue|svelte|java|c|cpp|h|hpp|php|rb|swift|kt|cs|ini|conf|env|webmanifest))(?![\w@./-])/giu
 
   const hasTextlinkAncestor = (el) => {
     let n = el
@@ -218,12 +254,32 @@ function apply(ctx) {
     return false
   }
 
+  // 链接有效性校验：路径在磁盘/根目录中不存在时，把刚生成的链接还原为纯文本，
+  // 避免「其实并未有文件」的假链接误导。绝对路径查磁盘，相对路径只在根目录内精确查。
+  const verifyTextlink = (a) => {
+    const href = (a.getAttribute('href') || '').trim()
+    if (!href || /^(https?:|mailto:|tel:|javascript:|data:|#)/i.test(href)) return
+    try {
+      call('lookup-file', { sid: currentSid, path: href }).then((res) => {
+        if (!a.isConnected) return
+        if (!res || res.ok === false || !res.found) {
+          const tn = document.createTextNode(a.textContent || href)
+          if (a.parentNode) a.parentNode.replaceChild(tn, a)
+        } else {
+          a.title = '在侧边预览中打开 ' + href
+          delete a.dataset.wvpPending
+        }
+      }).catch(() => { /* noop */ })
+    } catch (e) { /* noop */ }
+  }
+
   const convertTextNode = (textNode) => {
     const text = textNode.nodeValue
     TEXTLINK_RE.lastIndex = 0
     if (!text || !TEXTLINK_RE.test(text)) return
     TEXTLINK_RE.lastIndex = 0
     const frag = document.createDocumentFragment()
+    const made = []
     let last = 0
     let m
     let changed = false
@@ -236,6 +292,7 @@ function apply(ctx) {
       a.title = '在侧边预览中打开 '
       a.textContent = m[0]
       frag.appendChild(a)
+      made.push(a)
       last = m.index + m[0].length
     }
     if (!changed) return
@@ -243,6 +300,7 @@ function apply(ctx) {
     const parent = textNode.parentNode
     if (parent && parent.nodeType === 1 && !hasTextlinkAncestor(parent)) {
       parent.replaceChild(frag, textNode)
+      for (const a of made) verifyTextlink(a)
     }
   }
 
@@ -316,6 +374,33 @@ function apply(ctx) {
     /^~[\/]/.test(h) ||
     /^[A-Za-z]:[\\/]/.test(h)
 
+  // 自动链接偶尔遗漏（新任务刚切换/流式渲染时）→ 点击纯文本路径兜底：
+  // 先把所在消息块现场转成链接，再按点击坐标命中具体链接，交给下方统一打开流程。
+  const relinkAnchor = (e, t) => {
+    if (!t || !t.closest) return null
+    let scope = null
+    try { scope = t.closest('[data-slot="conversation.session"]') } catch (err) { return null }
+    if (!scope) return null
+    let block = t
+    for (let i = 0; i < 8 && block && block !== scope; i++) {
+      if (block.nodeType !== 1) { block = block.parentElement; continue }
+      const text = block.textContent || ''
+      TEXTLINK_RE.lastIndex = 0
+      if (TEXTLINK_RE.test(text)) break
+      block = block.parentElement
+    }
+    if (!block || block === scope || block.nodeType !== 1) return null
+    try { processNode(block) } catch (err) { /* noop */ }
+    const x = e.clientX, y = e.clientY
+    const anchors = Array.from(block.querySelectorAll('a.wvp-textlink'))
+    let hit = anchors.find((a2) => {
+      const r2 = a2.getBoundingClientRect()
+      return r2 && x >= r2.left && x <= r2.right && y >= r2.top && y <= r2.bottom
+    })
+    if (!hit && anchors.length === 1) hit = anchors[0]
+    return hit || null
+  }
+
   const onDocClick = (e) => {
     if (!e || e.defaultPrevented) return
     if (e.button !== 0) return
@@ -323,11 +408,18 @@ function apply(ctx) {
     const t = e.target
     if (!t || !t.closest) return
     if (t.closest('.wvp-root')) return
-    const a = t.closest('a[href]')
-    if (!a) return
+    let a = t.closest('a[href]')
+    if (!a) {
+      a = relinkAnchor(e, t)
+      if (!a) return
+    }
     const href = (a.getAttribute('href') || '').trim()
-    const pp = getPanel(currentSid)
-    const base = pp.model.get().base || ('/__dsh-preview/' + currentSid)
+    // 按点击处所属会话容器取 sid；映射未建立时回退到 currentSid（PlayButton 已实时同步）
+    let scope = null
+    try { scope = t.closest ? t.closest('[data-slot="conversation.session"]') : null } catch (e) { scope = null }
+    const sid = (scope && sidByRoot.get(scope)) || currentSid
+    const pp = getPanel(sid)
+    const base = pp.model.get().base || ('/__dsh-preview/' + sid)
     let url = null
     if (/^https?:\/\//i.test(href)) {
       url = href
@@ -338,15 +430,27 @@ function apply(ctx) {
     } else if (isLocalAbsPath(href)) {
       const name = href.split(/[\\/]/).pop().split('?')[0].split('#')[0]
       if (!name) return
-      url = base + '/' + name
-      call('resolve-path', { sid: currentSid, path: href }).then((res) => {
-        const p2 = getPanel(currentSid)
+      // 绝对/~/路径不先猜 URL（避免闪现“预览根目录中找不到”），等 resolve-path 精确定位后再加载
+      call('resolve-path', { sid, path: href }).then((res) => {
+        const p2 = getPanel(sid)
         if (res && res.ok && res.url) {
-          p2.model.set({ url: res.url, error: null, suggest: null, note: res.note || null })
+          p2.model.set({ url: res.url, error: null, suggest: null, candidates: [], note: res.note || null })
+        } else if (res && res.candidates && res.candidates.length) {
+          const mem = rememberedPath(sid, res.file || name)
+          const remembered = mem && res.candidates.find((c) => c.rel === mem)
+          if (remembered) {
+            p2.model.set({ url: p2.model.get().base + '/' + remembered.rel, error: null, suggest: null, candidates: [], note: '已按上次选择打开 ' + remembered.rel })
+          } else {
+            p2.model.set({ error: res.error || '找到多个同名文件，请选择', suggest: null, candidates: res.candidates, note: null })
+          }
         } else if (res && !res.ok && res.error) {
-          p2.model.set({ error: res.error, suggest: res.suggestRoot ? { root: res.suggestRoot, file: res.file || name } : null, note: null })
+          p2.model.set({ error: res.error, suggest: res.suggestRoot ? { root: res.suggestRoot, file: res.file || name } : null, candidates: [], note: null })
         }
       }).catch(() => { /* noop */ })
+      e.preventDefault()
+      e.stopPropagation()
+      if (!pp.store.get()) pp.store.set(true)
+      return
     } else if (!href.startsWith('/') && !href.includes('://')) {
       const rel = href.split('?')[0].split('#')[0].replace(/^\.?\//, '')
       if (rel) url = base + '/' + rel
@@ -356,7 +460,7 @@ function apply(ctx) {
     }
     e.preventDefault()
     e.stopPropagation()
-    pp.model.set({ url, error: null, selected: null })
+    pp.model.set({ url, error: null, selected: null, candidates: [] })
     if (!pp.store.get()) pp.store.set(true)
   }
   document.addEventListener('click', onDocClick, true)
@@ -448,7 +552,8 @@ function apply(ctx) {
   let iframeEl = null
   let markDisposer = null
   const INTERNAL_CLASSES = ['wvp-mark-hover', 'wvp-mark-active', 'wvp-note', 'wvp-note-x']
-  const FRAME_CSS = `
+  const FRAME_CSS_DARK = `
+
 .wvp-marking { cursor:crosshair !important; }
 .wvp-marking .wvp-mark-hover { cursor:pointer !important; }
 .wvp-marking a, .wvp-marking button, .wvp-marking [role='button'] { cursor:pointer !important; }
@@ -461,6 +566,22 @@ function apply(ctx) {
 .wvp-ann-input input:focus { border-color:#4f8cff; }
 .wvp-ann-input-btn { background:#4f8cff; color:#fff; border:none; border-radius:6px; padding:3px 9px; font-size:12px; cursor:pointer; }
 `
+  const FRAME_CSS_LIGHT = `
+
+.wvp-marking { cursor:crosshair !important; }
+.wvp-marking .wvp-mark-hover { cursor:pointer !important; }
+.wvp-marking a, .wvp-marking button, .wvp-marking [role='button'] { cursor:pointer !important; }
+.wvp-mark-hover { outline:2px dashed #ff9800 !important; outline-offset:2px; }
+.wvp-mark-active { outline:2px solid #4f8cff !important; outline-offset:2px; background:rgba(79,140,255,.12) !important; }
+.wvp-note { position:absolute; top:-26px; left:0; z-index:2147483647; background:#ffd54a; color:#3a2f00; font:12px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:2px 8px; border-radius:4px; white-space:pre-wrap; max-width:280px; box-shadow:0 1px 6px rgba(0,0,0,.18); }
+.wvp-note-x { cursor:pointer; margin-left:8px; font-weight:700; color:#7a5d00; }
+.wvp-ann-input { position:absolute; top:-34px; left:0; z-index:2147483646; display:flex; gap:4px; align-items:center; background:#ffffff; border:1px solid #d0d7de; border-radius:8px; padding:4px 6px; box-shadow:0 4px 18px rgba(0,0,0,.18); }
+.wvp-ann-input input { background:#f6f8fa; color:#1f2328; border:1px solid #d0d7de; border-radius:6px; padding:3px 8px; font:12px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; outline:none; width:190px; }
+.wvp-ann-input input:focus { border-color:#4f8cff; }
+.wvp-ann-input-btn { background:#4f8cff; color:#fff; border:none; border-radius:6px; padding:3px 9px; font-size:12px; cursor:pointer; }
+`
+  // 跟随宿主（DSH）主题：body[data-ds-dark-theme] 存在 = 夜间，否则白天
+  const frameThemeCss = () => (document.body && document.body.hasAttribute('data-ds-dark-theme') ? FRAME_CSS_DARK : FRAME_CSS_LIGHT)
 
   const safeDoc = () => {
     try {
@@ -469,6 +590,19 @@ function apply(ctx) {
       return null
     }
   }
+
+  // 把宿主（DSH）主题同步进预览 iframe 文档：html[data-theme] 由 host 端
+  // 生成的代码/Markdown/文件不存在页面消费，切换主题即时生效。
+  const applyHostThemeToDoc = (doc) => {
+    if (!doc || !doc.documentElement) return
+    const dark = !!(document.body && document.body.hasAttribute('data-ds-dark-theme'))
+    doc.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+    try { doc.documentElement.style.colorScheme = dark ? 'dark' : 'light' } catch (e) { /* noop */ }
+  }
+  const hostThemeObserver = (typeof MutationObserver !== 'undefined' && document.body)
+    ? new MutationObserver(() => { const d = safeDoc(); if (d) applyHostThemeToDoc(d) })
+    : null
+  if (hostThemeObserver) hostThemeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
 
   const esc = (s) => String(s).replace(/([^a-zA-Z0-9_\-\u00a0-\uffff])/g, (c) => '\\' + c)
 
@@ -617,9 +751,17 @@ function apply(ctx) {
     if (!doc.head.querySelector('#wvp-mark-style')) {
       const style = doc.createElement('style')
       style.id = 'wvp-mark-style'
-      style.textContent = FRAME_CSS
+      style.textContent = frameThemeCss()
       doc.head.appendChild(style)
     }
+    const syncFrameTheme = () => {
+      const s = doc.querySelector('#wvp-mark-style')
+      if (s) s.textContent = frameThemeCss()
+    }
+    const themeObserver = (typeof MutationObserver !== 'undefined' && document.body)
+      ? new MutationObserver(syncFrameTheme)
+      : null
+    if (themeObserver) themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
     doc.documentElement.classList.add('wvp-marking')
     const onOver = (e) => {
       const t = e.target
@@ -663,6 +805,7 @@ function apply(ctx) {
       clearHover(doc)
       clearActive(doc)
       closeAnnInput(doc)
+      if (themeObserver) themeObserver.disconnect()
     }
   }
 
@@ -730,7 +873,22 @@ function apply(ctx) {
     const p = getPanel(props.sessionId)
     useSub(p.store)
     const open = p.store.get()
+    const playRef = React.useRef(null)
+    if (props.sessionId) currentSid = props.sessionId
+    React.useEffect(() => {
+      const el = playRef.current
+      if (!el || !props.sessionId) return
+      let s = el
+      while (s && s.getAttribute) {
+        if (s.getAttribute('data-slot') === 'conversation.session') {
+          sidByRoot.set(s, props.sessionId)
+          return
+        }
+        s = s.parentElement
+      }
+    }, [])
     return React.createElement('button', {
+      ref: playRef,
       className: 'wvp-play' + (open ? ' is-active' : ''),
       title: open ? '关闭网页预览' : '打开网页预览',
       'aria-label': '网页预览',
@@ -1055,7 +1213,7 @@ function apply(ctx) {
         // 根目录默认 = 当前会话所属工作区目录
         const hint = workspacePathFor(sid, items, recentId)
         const res = await call('set-root', { path: hint, sid })
-        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, note: null })
+        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, candidates: [], note: null })
         if (rootInput === '' || (rootInput && hint && rootInput !== res.root)) setRootInput(res.root || '')
         const [pages, det] = await Promise.all([
           call('pages', { dir: '', sid }),
@@ -1123,11 +1281,11 @@ function apply(ctx) {
 
     const go = () => {
       const u = resolveUrl(input, m.base)
-      if (u) { p.model.set({ url: u, error: null, suggest: null, note: null }); setReload((r) => r + 1) }
+      if (u) { p.model.set({ url: u, error: null, suggest: null, candidates: [], note: null }); setReload((r) => r + 1) }
     }
 
     const openPage = (rel) => {
-      p.model.set({ url: m.base + '/' + rel, error: null, suggest: null, note: null })
+      p.model.set({ url: m.base + '/' + rel, error: null, suggest: null, candidates: [], note: null })
       setReload((r) => r + 1)
     }
 
@@ -1145,7 +1303,7 @@ function apply(ctx) {
       if (!s) return
       try {
         const res = await call('set-root', { path: s.root, sid })
-        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, note: null })
+        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, candidates: [], note: null })
         setRootInput(res.root || '')
         if (s.file) p.model.set({ url: res.base + '/' + s.file })
         setReload((r) => r + 1)
@@ -1157,7 +1315,7 @@ function apply(ctx) {
     const applyRoot = async () => {
       try {
         const res = await call('set-root', { path: rootInput, sid })
-        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, note: null })
+        p.model.set({ root: res.root, base: res.base, error: null, suggest: null, candidates: [], note: null })
         const pp = await call('pages', { dir: '', sid })
         p.model.set({ dir: pp.dir || '', dirs: pp.dirs || [], pages: pp.pages || [] })
         const t = pp.pages.find((x) => x.name === 'index.html') || pp.pages[0]
@@ -1211,6 +1369,7 @@ function apply(ctx) {
     const onFrameLoad = () => {
       const doc = safeDoc()
       if (!doc) return
+      applyHostThemeToDoc(doc)
       replayAnnotations(doc)
       if (m.marking) ensureMarking(doc)
     }
@@ -1308,6 +1467,19 @@ function apply(ctx) {
         React.createElement('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
           '📁 ' + (m.suggest.file || '') + ' 在工作区外（' + m.suggest.root + '）'),
         React.createElement('button', { className: 'wvp-btn primary', onClick: switchRoot }, '切换到该目录并打开')
+      ) : null,
+      (m.candidates && m.candidates.length) ? React.createElement('div', { className: 'wvp-cands' },
+        React.createElement('div', { className: 'wvp-cands-head' }, '同名文件（' + m.candidates.length + ' 个，请选择要打开的）：'),
+        m.candidates.map((cand) => React.createElement('button', {
+          key: cand.rel,
+          className: 'wvp-cand',
+          title: cand.rel,
+          onClick: () => {
+            rememberPath(sid, cand.name || (cand.rel.split('/').pop() || ''), cand.rel)
+            p.model.set({ url: m.base + '/' + cand.rel, error: null, suggest: null, candidates: [], note: null })
+            setReload((r) => r + 1)
+          }
+        }, '📄 ' + cand.rel))
       ) : null,
       m.note ? React.createElement('div', { className: 'wvp-hint' }, m.note) : null,
       m.marking ? React.createElement('div', { className: 'wvp-hint' }, '标记模式：悬停高亮元素，点击选取并直接在元素旁添加标注；Esc 退出') : null,
