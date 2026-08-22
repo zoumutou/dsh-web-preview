@@ -1,0 +1,21 @@
+diff --git a/packages/dsh-community-plugins/community.json b/packages/dsh-community-plugins/community.json
+index f9f0ca9..47e37d7 100644
+--- a/packages/dsh-community-plugins/community.json
++++ b/packages/dsh-community-plugins/community.json
+@@ -398,5 +398,16 @@
+     "repo": "https://github.com/liaoyonghong/dsh-workspace-api",
+     "npm": "dsh-workspace-api",
+     "category": "knowledge"
++  },
++  {
++    "id": "dsh-web-preview-panel",
++    "name": "侧边网页预览",
++    "nameEn": "Web Preview Panel",
++    "author": "zoumutou",
++    "description": "侧边网页预览面板：工作区文件 iframe 预览（代码行号/Markdown/图片直显）、项目运行日志、元素标记批注、链接点击接管、文件拖入；自动跟随 DSH 白天/夜间主题，~/ 与绝对路径直开。",
++    "descriptionEn": "Side web preview panel: iframe preview of workspace files (code with line numbers, Markdown, images), project run with live logs, element marking & annotation, link-click takeover, file drop-in; follows the DSH light/dark theme and opens ~/ or absolute paths directly.",
++    "repo": "https://github.com/zoumutou/dsh-web-preview",
++    "npm": "dsh-web-preview-panel",
++    "category": "tools"
+   }
+ ]
